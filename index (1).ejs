@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" >
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="/style/index.css">
+    <script nonce="undefined" src="https://cdn.zingchart.com/zingchart.min.js"></script>
+    <script src="https://cdn.zinggrid.com/zinggrid.min.js" defer></script>
+  </head>
+  <body>
+   <nav>
+   <ul>
+     <li>
+
+      <% if (admin) { %>
+        <a href="/api/users">User Management</a><br>
+      <% } %> </li>
+    <li>
+      <a href="/api/logout" id="logout">Logout</a><br>
+     </li>
+   </ul>
+   </nav>
+    
+    <div id="container">
+      <h1>Welcome to the Dashboard</h1>
+      <div id="charts">
+        <div id="pieChart"></div>
+        <div id="barChart"></div>
+      </div>
+  
+      <div id="grid-container">
+        <zing-grid id="grid" pager page-size="5" page-size-options="2,3,6" layout="row"></zing-grid>
+      </div>
+    </div>
+    
+    <footer>
+      <a href= "/views/grid.html" id="report">Generate Report</a><br>
+    </footer>
+    
+  
+    
+  
+    <script>
+      const fetchParams = {
+          method: "GET",
+          mode: "cors",
+          cache: "default"
+      };
+       const urlActivity = "https://jaredvillanueva.com/api/activity"
+       const urlStatic = "https://jaredvillanueva.com/api/Static"
+       const urlPerformance = "https://jaredvillanueva.com/api/Performance"
+
+       async function fetchDataFromAPI(url, params) {
+        try {
+          const response = await fetch(url, params);
+          if (!response.ok) {
+            throw new Error('Failed to fetch data from API');
+          }
+          const data = await response.json();
+          return data;
+        } catch (error) {
+          console.error(error);
+          return null;
+        }
+      }
+
+      async function combineDataFromAPI() {
+        try {
+          const [data1, data2, data3] = await Promise.all([
+            fetchDataFromAPI(urlStatic, fetchParams),
+            fetchDataFromAPI(urlPerformance, fetchParams),
+            fetchDataFromAPI(urlActivity, fetchParams),
+          ]);
+
+          populateBar(data3);
+          populatePie(data1);
+
+          // Define all columns
+          const columnsToDelete = ['userAgent','language','cookiesEnabled','jsEnabled','imgEnabled','cssEnabled', 'screenWidth', 'screenHeight', 'windowWidth', 'windowHeight'];
+
+          const modifiedData1 = deleteColumns(data1, columnsToDelete);
+
+          // Merge the data based on ID
+          const mergedData = mergeDataById(modifiedData1, data2);
+
+          const myGrid = document.getElementById("grid");
+
+          // Set the data attribute with the merged data
+          myGrid.data = mergedData;
+          
+        } catch (error) {
+          console.error(error);
+        }
+      }
+
+      //function to delete columns from data
+      function deleteColumns(data, columnsToDelete) {
+        return data.map(item => {
+          const newItem = { ...item };
+
+          // Delete the specified columns
+          columnsToDelete.forEach(column => {
+            delete newItem[column];
+          });
+
+          return newItem;
+        });
+      }
+
+
+      //function to merge data by ID
+      function mergeDataById(data1, data2) {
+        // Create a map to store the merged data
+        const mergedMap = new Map();
+
+        // Add data from data1 to the map
+        data1.forEach(item => mergedMap.set(item.id, item));
+
+        // Merge data from data2 with data1
+        data2.forEach(item => {
+          const id = item.id;
+          if (mergedMap.has(id)) {
+            // Merge properties of existing item
+            Object.assign(mergedMap.get(id), item);
+          } else {
+            // Add new item to the map
+            mergedMap.set(id, item);
+          }
+        });
+
+        // Convert the merged map back to an array
+        const mergedData = Array.from(mergedMap.values());
+
+        return mergedData;
+      }
+
+      combineDataFromAPI();
+
+      function populateBar(data) {
+          //Format the data for the bar graph
+        let idle = [];
+        let entryTime = [];
+        let startTime = [];
+        let page = [];
+        let buttonClick = [];
+        let keyUp = [];
+        let keyDown = [];
+        let error = [];
+        let cursorX = [];
+        let cursorY = [];
+        data.forEach(element => {
+          if(element.idleDuration != null){
+            idle.push(element.idleDuration);
+          };
+          if(element.page != null){
+            page.push(element.page);
+          };
+          if(element.entryTime != null){
+            entryTime.push(element.entryTime);
+          };
+          if(element.exitTime != null){
+            startTime.push(element.exitTime);
+          };
+          if(element.buttonClick != null){
+            buttonClick.push(element.buttonClick);
+          }
+          if(element.keyUp != null){
+            keyUp.push(element.keyUp);
+          }
+          if(element.keyDown != null){
+            keyDown.push(element.keyDown);
+          }
+          if(element.error != null){
+            error.push(element.keyDown);
+          }
+          if(element.scrollX != null){
+            cursorX.push(element.scrollX);
+          }
+          if(element.scrollY != null){
+            cursorY.push(element.scrollY);
+          }
+
+        });
+
+          const barData = []
+          barData.push(idle.length);
+          barData.push(page.length);
+          barData.push(entryTime.length);
+          barData.push(startTime.length);
+          barData.push(buttonClick.length);
+          barData.push(keyUp.length);
+          barData.push(keyDown.length);
+          barData.push(cursorX.length);
+          barData.push(cursorY.length);
+        
+          var chartData = {
+            type: 'bar',
+            'scale-x': {
+              label: { /* Scale Title */
+                text: "Activity Data",
+              },
+              "item":{  
+                "font-size":"8px"  
+              },
+              "values":["Idle","Page","EntryTime","StartTime","ButtonClick","KeyUp","KeyDown","ScrollX","ScrollY"], 
+              "autoFit": true, 
+
+            },
+            'scale-y': {
+              label: { /* Scale Title */
+                text: "Count",
+              },
+            },
+            "plotarea": {
+              "margin":"dynamic"
+            },
+            title: {
+              text: "Count of Activity Data"
+            },
+            series: [
+              {values: barData}
+            ]
+          };
+          zingchart.render({
+            id: 'barChart',
+            data: chartData,
+            height: 400,
+            width: 600
+          });
+        }
+
+        function populatePie(data) {
+          //Format the data for the bar graph
+          let enUS = [];
+          let fr = [];
+          let ja = [];
+          let es = [];
+          let de = [];
+          let vi = [];
+          let ko = [];
+          let zh = [];
+          data.forEach(element => {
+            if(element.language == "ja"){
+              ja.push(element.language);
+            };
+            if(element.language == "en-US" || element.language == "en"){
+              enUS.push(element.language);
+            };
+            if(element.language == "es"){
+              es.push(element.language);
+            };
+            if(element.language == "fr"){
+              fr.push(element.language);
+            };
+            if(element.language == "de-DE"){
+              de.push(element.language);
+            };
+            if(element.language == "vi"){
+              vi.push(element.language);
+            };
+            if(element.language == "ko"){
+              ko.push(element.language);
+            };
+            if(element.language == "zh"){
+              zh.push(element.language);
+            };
+
+          });
+
+        
+          var chartData = {
+            type: 'pie',
+            legend: {
+
+            },
+            title: {
+              text: "Popularity of Languages"
+            },
+            series: [
+            { values: [enUS.length],
+              text: "English" },
+            { values: [es.length],
+              text: "Spanish" },
+            { values: [fr.length],
+              text: "France" },
+            { values: [ja.length],
+            text: "Japanse" },
+            { values: [de.length],
+            text: "German" },
+            { values: [vi.length],
+            text: "Vietnamese" },
+            { values: [ko.length],
+            text: "Korean" },
+            { values: [zh.length],
+            text: "Chinese" },
+            
+            ]
+          };
+          zingchart.render({
+            id: 'pieChart',
+            data: chartData,
+            height: 400,
+            width: 600
+          });
+        }
+    </script>
+
+  </body>
+</html>

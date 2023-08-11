@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" >
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grid Report</title>
+    <link rel="stylesheet" href="/style/grid.css">
+    <script nonce="undefined" src="https://cdn.zingchart.com/zingchart.min.js"></script>
+    <script src="https://cdn.zinggrid.com/zinggrid.min.js" defer></script>
+  </head>
+
+  <body>
+    
+    <nav>
+      <ul>
+        <li>
+         <a href="/api/logout" id="logout">Logout</a><br>
+        </li>
+      </ul>
+    </nav>
+
+    <h1>Can the user's network connection type be associated with differences in the homepage's load times?</h1>
+    <div id="chart-container">
+      <!-- <div class="chart-item" id="lineChart"></div> -->
+      <div class="chart-item" id="barChart"></div>
+      <div class="chart-item">
+        <zing-grid caption="Networks & Page Load(s)" id="grid" pager page-size="5" page-size-options="5,10,15" layout="row"></zing-grid>
+      </div>
+      <div class="chart-item">
+        <p>
+          The goal of the bar chart is to show the average load time for each network type. The y-axis represents the load time and the x-axis is the network type. From the chart we can see that the 4g has the lowest bar which means that it has the fastest average load time. The second fastest load time would be 2g then 3g. This chart tells us which network has the fastest and slowest load times. Since 4g is the fastest and 3g is the slowest we can see that there is no correlation bewtween network types and average load speeds. 
+          The grid displays the load start time, load end time, load event time, and network type for each id. Each of the id represents a different session. So it shows what the load times are for each session. The load times can be used for us to see if the specific times for each session and if there are any outliers in the data. 
+        </p>
+      </div>
+    </div>
+    
+  
+    <script>
+      const fetchParams = {
+          method: "GET",
+          mode: "cors",
+          cache: "default"
+      };
+       const urlActivity = "https://jaredvillanueva.com/api/activity"
+       const urlStatic = "https://jaredvillanueva.com/api/Static"
+       const urlPerformance = "https://jaredvillanueva.com/api/Performance"
+
+       async function fetchDataFromAPI(url, params) {
+        try {
+          const response = await fetch(url, params);
+          if (!response.ok) {
+            throw new Error('Failed to fetch data from API');
+          }
+          const data = await response.json();
+          return data;
+        } catch (error) {
+          console.error(error);
+          return null;
+        }
+      }
+
+      async function combineDataFromAPI() {
+        try {
+          const [data1, data2, data3] = await Promise.all([
+            fetchDataFromAPI(urlStatic, fetchParams),
+            fetchDataFromAPI(urlPerformance, fetchParams),
+            fetchDataFromAPI(urlActivity, fetchParams),
+          ]);
+
+          // Define all columns
+          const columnsToDelete = ['userAgent','language','cookiesEnabled','jsEnabled','imgEnabled','cssEnabled', 'screenWidth', 'screenHeight', 'windowWidth', 'windowHeight'];
+
+          const modifiedData1 = deleteColumns(data1, columnsToDelete);
+
+          // Merge the data based on ID
+          const mergedData = mergeDataById(modifiedData1, data2);
+
+          const myGrid = document.getElementById("grid");
+
+          // Set the data attribute with the merged data
+          myGrid.data = mergedData;
+
+          popBar(mergedData);
+          
+        } catch (error) {
+          console.error(error);
+        }
+      }
+
+      //function to delete columns from data
+      function deleteColumns(data, columnsToDelete) {
+        return data.map(item => {
+          const newItem = { ...item };
+
+          // Delete the specified columns
+          columnsToDelete.forEach(column => {
+            delete newItem[column];
+          });
+
+          return newItem;
+        });
+      }
+
+
+      //function to merge data by ID
+      function mergeDataById(data1, data2) {
+        // Create a map to store the merged data
+        const mergedMap = new Map();
+
+        // Add data from data1 to the map
+        data1.forEach(item => mergedMap.set(item.id, item));
+
+        // Merge data from data2 with data1
+        data2.forEach(item => {
+          const id = item.id;
+          if (mergedMap.has(id)) {
+            // Merge properties of existing item
+            Object.assign(mergedMap.get(id), item);
+          } else {
+            // Add new item to the map
+            mergedMap.set(id, item);
+          }
+        });
+
+        // Convert the merged map back to an array
+        const mergedData = Array.from(mergedMap.values());
+
+        return mergedData;
+      }
+
+      combineDataFromAPI();
+
+      function calculateAverage(array) {
+        if (array.length === 0) {
+          return 0; // Return 0 for an empty array to avoid division by zero
+        }
+      
+        const sum = array.reduce((total, currentValue) => total + currentValue, 0);
+        const average = sum / array.length;
+      
+        return average;
+      }
+
+      function popBar(data) {
+        let twoG = [];
+        let threeG = [];
+        let fourG = [];
+
+        data.forEach(element => {
+          if(element.networkConnectionType == "2g" && element.loadEventTime != undefined ){
+            twoG.push(element.loadEventTime);
+          };
+          if(element.networkConnectionType == "3g" && element.loadEventTime != undefined ){
+            threeG.push(element.loadEventTime);
+          };
+          if(element.networkConnectionType == "4g" && element.loadEventTime != undefined){
+            fourG.push(element.loadEventTime);
+          };
+        })
+
+        let float2G = twoG.map(parseFloat);
+        let float3G = threeG.map(parseFloat);
+        let float4G = fourG.map(parseFloat);
+
+        let int2G = float2G.map((value) => parseInt(value, 10));
+        let int3G = float3G.map((value) => parseInt(value, 10));
+        let int4G = float4G.map((value) => parseInt(value, 10));
+
+
+        let avgTwoG = calculateAverage(int2G);
+        let avgThreeG = calculateAverage(int3G);
+        let avgFourG = calculateAverage(int4G);
+
+        const barData = []
+          barData.push(avgTwoG);
+          barData.push(avgThreeG);
+          barData.push(avgFourG);
+        
+          var chartData = {
+            type: 'bar',
+            'scale-x': {
+              label: {
+                text: "Network Types",
+              },
+              "item":{  
+                "font-size":"8px"  
+              },
+              "values":["2 g","3 g","4 g"], 
+              "autoFit": true, 
+
+            },
+            'scale-y': {
+              label: {
+                text: "Average Load Speed (ms)",
+              },
+            },
+            "plotarea": {
+              "margin":"dynamic"
+            },
+            title: {
+              text: "Network Type vs Average Load Speed",
+              'adjust-layout': true
+            },
+            series: [
+              {values: barData}
+            ]
+          };
+          zingchart.render({
+            id: 'barChart',
+            data: chartData,
+            height: 400,
+            width: 600
+          });
+      }
+      
+      function populateLine(data) {
+        let twoG = [];
+        let threeG = [];
+        let fourG = [];
+
+        data.forEach(element => {
+          if(element.networkConnectionType == "2g"){
+            twoG.push(element.loadEventTime);
+          };
+          if(element.networkConnectionType == "3g"){
+            threeG.push(element.loadEventTime);
+          };
+          if(element.networkConnectionType == "4g"){
+            fourG.push(element.loadEventTime);
+          };
+        })
+        
+          var chartData = {
+            type: 'line',
+            legend: {
+              'layout': "float",
+              'background-color': "none",
+              'border-width': 0,
+              'shadow': 0,
+              'toggle-action': "remove",
+              'item': {
+                'padding': 7,
+                'marginRight': 17,
+                'cursor': "hand"
+              },
+              y: '5%',
+            },
+            'scale-x': {
+              label: {
+                text: "id",
+              },
+            },
+            'scale-y': {
+              label: {
+                text: "Load Event Time (ms)",
+              },
+            },
+            "plotarea": {
+              "margin":"dynamic"
+            },
+            title: {
+              text: "Correlation between network types and load speed",
+              'adjust-layout': true
+            },
+            series: [
+            { values: twoG,
+              text: "2G",
+              'scale-y': {
+                values: '0:10:1'
+              }
+            },
+            { values: threeG,
+              text: "3G",
+              'scale-y': {
+                values: '0:10:1'
+              },
+            },
+            { values: fourG,
+              text: "4G",
+              'scale-y': {
+                values: '0:10:1'
+              },
+            }
+            ]
+          };
+          zingchart.render({
+            id: 'lineChart',
+            data: chartData,
+            height: 400,
+            width: 600
+          });
+        }
+    </script>
+  </body>
+</html>
